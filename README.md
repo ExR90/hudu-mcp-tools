@@ -4,6 +4,8 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets Cla
 
 Built for MSPs. Works with cloud-hosted and self-hosted Hudu.
 
+***IMPORTANT CONTEXT: THIS IS IN ACTIVE ALPHA FORM AS OF 20250225 - IT IS NOT READY FOR PRODUCTION***
+
 ---
 
 ## What it does
