@@ -1,7 +1,7 @@
 {
-  "name": "hudu-kb-mcp",
+  "name": "hudu-mcp-tools",
   "version": "1.0.0",
-  "description": "MCP server for Claude Desktop to create and manage Hudu KB articles",
+  "description": "MCP tools for Claude Desktop to manage Hudu KB articles, templates, and folders",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

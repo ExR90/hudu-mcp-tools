@@ -1,4 +1,4 @@
-# Hudu KB MCP — Claude Desktop Plugin
+# hudu-mcp-tools
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server that lets Claude Desktop create, retrieve, edit, and organise Knowledge Base articles in your [Hudu](https://www.hudu.com) instance.
 
@@ -33,8 +33,8 @@ Once installed, Claude can:
 ### 1. Clone and build
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/hudu-plugin-claude.git
-cd hudu-plugin-claude
+git clone https://github.com/YOUR_USERNAME/hudu-mcp-tools.git
+cd hudu-mcp-tools
 npm install
 npm run build
 ```
@@ -62,7 +62,7 @@ Add the following inside the `mcpServers` object (create the file if it doesn't 
   "mcpServers": {
     "hudu-kb": {
       "command": "node",
-      "args": ["/absolute/path/to/hudu-plugin-claude/dist/index.js"],
+      "args": ["/absolute/path/to/hudu-mcp-tools/dist/index.js"],
       "env": {
         "HUDU_BASE_URL": "https://yourcompany.huducloud.com",
         "HUDU_API_KEY": "your-api-key-here"
