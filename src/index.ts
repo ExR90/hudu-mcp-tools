@@ -9,6 +9,7 @@ import { HuduClient } from "./hudu-client.js";
 import { articleTools, handleArticleTool } from "./tools/articles.js";
 import { templateTools, handleTemplateTool } from "./tools/templates.js";
 import { folderTools, handleFolderTool } from "./tools/folders.js";
+import { companyTools, handleCompanyTool } from "./tools/companies.js";
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
@@ -21,11 +22,12 @@ const server = new Server(
 
 // ─── All tools ────────────────────────────────────────────────────────────────
 
-const allTools = [...articleTools, ...templateTools, ...folderTools];
+const allTools = [...articleTools, ...templateTools, ...folderTools, ...companyTools];
 
 const articleToolNames: Set<string> = new Set(articleTools.map((t) => t.name));
 const templateToolNames: Set<string> = new Set(templateTools.map((t) => t.name));
 const folderToolNames: Set<string> = new Set(folderTools.map((t) => t.name));
+const companyToolNames: Set<string> = new Set(companyTools.map((t) => t.name));
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
   if (folderToolNames.has(name)) {
     return handleFolderTool(name, safeArgs, client);
+  }
+  if (companyToolNames.has(name)) {
+    return handleCompanyTool(name, safeArgs, client);
   }
 
   return {

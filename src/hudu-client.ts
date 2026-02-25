@@ -27,6 +27,19 @@ export interface HuduFolder {
   updated_at: string;
 }
 
+export interface HuduCompany {
+  id: number;
+  name: string;
+  slug: string;
+  phone_number: string | null;
+  website: string | null;
+  city: string | null;
+  state: string | null;
+  country_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ListArticlesParams {
   page?: number;
   page_size?: number;
@@ -34,12 +47,14 @@ export interface ListArticlesParams {
   search?: string;
   slug?: string;
   article_type?: number;
+  company_id?: number;
 }
 
 export interface CreateArticleParams {
   name: string;
   content: string;
   folder_id?: number;
+  company_id?: number;
 }
 
 export interface UpdateArticleParams {
@@ -90,6 +105,7 @@ export class HuduClient {
         ...(params.name && { name: params.name }),
         ...(params.search && { search: params.search }),
         ...(params.article_type !== undefined && { article_type: params.article_type }),
+        ...(params.company_id !== undefined && { company_id: params.company_id }),
       },
     });
     return response.data.articles ?? [];
@@ -106,9 +122,14 @@ export class HuduClient {
         name: params.name,
         content: params.content,
         ...(params.folder_id !== undefined && { folder_id: params.folder_id }),
+        ...(params.company_id !== undefined && { company_id: params.company_id }),
       },
     });
     return response.data.article;
+  }
+
+  async deleteArticle(id: number): Promise<void> {
+    await this.http.delete(`/articles/${id}`);
   }
 
   async updateArticle(id: number, params: UpdateArticleParams): Promise<HuduArticle> {
@@ -129,13 +150,26 @@ export class HuduClient {
     return this.listArticles({ article_type: 1, page_size: 100 });
   }
 
+  // ─── Companies ───────────────────────────────────────────────────────────────
+
+  async listCompanies(params: { page?: number; page_size?: number; name?: string } = {}): Promise<HuduCompany[]> {
+    const response = await this.http.get<{ companies: HuduCompany[] }>("/companies", {
+      params: {
+        page: params.page ?? 1,
+        page_size: params.page_size ?? 100,
+        ...(params.name && { name: params.name }),
+      },
+    });
+    return response.data.companies ?? [];
+  }
+
   // ─── Folders ─────────────────────────────────────────────────────────────────
 
   async listFolders(): Promise<HuduFolder[]> {
-    const response = await this.http.get<{ article_folders: HuduFolder[] }>("/article_folders", {
+    const response = await this.http.get<{ folders: HuduFolder[] }>("/folders", {
       params: { page_size: 100 },
     });
-    return response.data.article_folders ?? [];
+    return response.data.folders ?? [];
   }
 
   // ─── Error helper ─────────────────────────────────────────────────────────────

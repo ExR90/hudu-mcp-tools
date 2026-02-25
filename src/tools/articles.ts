@@ -9,7 +9,7 @@ export const articleTools = [
   {
     name: "hudu_list_articles",
     description:
-      "List KB articles from Hudu. Supports pagination and optional filtering by name or keyword search. Returns id, name, slug, folder_id, and URL for each article.",
+      "List KB articles from Hudu. Supports pagination and optional filtering by name, keyword search, or company_id (for company-space articles). Returns id, name, slug, folder_id, company_id, and URL for each article.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -28,6 +28,10 @@ export const articleTools = [
         search: {
           type: "string",
           description: "Full-text search query across article content",
+        },
+        company_id: {
+          type: "number",
+          description: "Filter to articles belonging to a specific company space (use hudu_list_companies to find IDs). Omit for central/global KB articles.",
         },
       },
     },
@@ -69,7 +73,7 @@ export const articleTools = [
   {
     name: "hudu_create_article",
     description:
-      "Create a new KB article in Hudu. Content should be HTML. Optionally assign it to a folder (use hudu_list_article_folders to get folder IDs). Returns the created article with its ID and URL.",
+      "Create a new KB article in Hudu. Content should be HTML. Optionally assign it to a folder (use hudu_list_article_folders to get folder IDs). To create in a company space instead of the central KB, provide company_id (use hudu_list_companies to find IDs). Returns the created article with its ID and URL.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -84,6 +88,10 @@ export const articleTools = [
         folder_id: {
           type: "number",
           description: "Optional folder ID to place the article in (use hudu_list_article_folders to get IDs)",
+        },
+        company_id: {
+          type: "number",
+          description: "Optional company ID to create the article in a company-specific KB space instead of the central KB (use hudu_list_companies to find IDs)",
         },
       },
       required: ["name", "content"],
@@ -116,6 +124,29 @@ export const articleTools = [
       required: ["id"],
     },
   },
+  {
+    name: "hudu_migrate_article_to_company",
+    description:
+      "Migrate a central KB article into a company-specific KB space. Reads the source article, creates an identical copy in the target company space, and optionally deletes the original. Ideal for bulk migration of client-specific articles from the central KB into company portals. Use hudu_list_companies to find company IDs.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        article_id: {
+          type: "number",
+          description: "Numeric ID of the source article to migrate",
+        },
+        company_id: {
+          type: "number",
+          description: "Numeric ID of the destination company space (use hudu_list_companies to find IDs)",
+        },
+        delete_original: {
+          type: "boolean",
+          description: "Whether to delete the original central KB article after copying. Defaults to false. Set to true only when you are sure the migration is complete.",
+        },
+      },
+      required: ["article_id", "company_id"],
+    },
+  },
 ] as const;
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -125,6 +156,7 @@ const ListSchema = z.object({
   page_size: z.number().min(1).max(100).optional(),
   name: z.string().optional(),
   search: z.string().optional(),
+  company_id: z.number().optional(),
 });
 
 const GetSchema = z.object({ id: z.number() });
@@ -138,6 +170,7 @@ const CreateSchema = z.object({
   name: z.string().min(1),
   content: z.string().min(1),
   folder_id: z.number().optional(),
+  company_id: z.number().optional(),
 });
 
 const UpdateSchema = z.object({
@@ -147,10 +180,16 @@ const UpdateSchema = z.object({
   folder_id: z.number().optional(),
 });
 
+const MigrateSchema = z.object({
+  article_id: z.number(),
+  company_id: z.number(),
+  delete_original: z.boolean().optional(),
+});
+
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
-function summarizeArticle(a: { id: number; name: string; slug: string; folder_id: number | null; url: string }) {
-  return { id: a.id, name: a.name, slug: a.slug, folder_id: a.folder_id, url: a.url };
+function summarizeArticle(a: { id: number; name: string; slug: string; folder_id: number | null; company_id: number | null; url: string }) {
+  return { id: a.id, name: a.name, slug: a.slug, folder_id: a.folder_id, company_id: a.company_id, url: a.url };
 }
 
 export async function handleArticleTool(
@@ -167,6 +206,7 @@ export async function handleArticleTool(
           page_size: p.page_size,
           name: p.name,
           search: p.search,
+          company_id: p.company_id,
         });
         return ok(articles.map(summarizeArticle));
       }
@@ -198,6 +238,29 @@ export async function handleArticleTool(
         const { id, ...updates } = UpdateSchema.parse(args);
         const article = await client.updateArticle(id, updates);
         return ok(article);
+      }
+
+      case "hudu_migrate_article_to_company": {
+        const { article_id, company_id, delete_original } = MigrateSchema.parse(args);
+        const source = await client.getArticle(article_id);
+        const copy = await client.createArticle({
+          name: source.name,
+          content: source.content,
+          company_id,
+        });
+        const result: Record<string, unknown> = {
+          message: `Article "${source.name}" copied to company ${company_id}.`,
+          source_id: source.id,
+          new_article_id: copy.id,
+          new_article_url: copy.url,
+          original_deleted: false,
+        };
+        if (delete_original) {
+          await client.deleteArticle(article_id);
+          result.original_deleted = true;
+          result.message = `Article "${source.name}" migrated to company ${company_id} and original deleted.`;
+        }
+        return ok(result);
       }
 
       default:
