@@ -122,7 +122,6 @@ export class HuduClient {
         name: params.name,
         content: params.content,
         ...(params.folder_id !== undefined && { folder_id: params.folder_id }),
-        ...(params.company_id !== undefined && { company_id: params.company_id }),
       },
     });
     return response.data.article;
