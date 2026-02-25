@@ -9,7 +9,7 @@ export const articleTools = [
   {
     name: "hudu_list_articles",
     description:
-      "List KB articles from Hudu. Supports pagination and optional filtering by name, keyword search, or company_id (for company-space articles). Returns id, name, slug, folder_id, company_id, and URL for each article.",
+      "List KB articles from Hudu. Supports pagination and optional filtering by name, keyword search, or company_id (for company-space articles). Returns id, name, slug, folder_id, company_id, and URL for each article. NOTE: folder_id is NOT a supported filter — to get articles in a specific folder, fetch all articles and filter by folder_id client-side. NOTE: results are paginated (default 25 per page, max 100); to ensure completeness when processing all articles in a folder or KB, increment the page parameter until a page returns fewer results than page_size.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -100,7 +100,7 @@ export const articleTools = [
   {
     name: "hudu_update_article",
     description:
-      "Edit an existing KB article. You can update the title, content, and/or move it to a different folder. Only the fields you provide will be changed. Returns the updated article.",
+      "Edit an existing KB article. You can update the title, content, folder, and/or company association. Only the fields you provide will be changed. To move an article to a company KB, set company_id to the company's numeric ID. To move it back to the central KB, set company_id to null. Returns the updated article.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -120,6 +120,10 @@ export const articleTools = [
           type: "number",
           description: "New folder ID to move the article to (use hudu_list_article_folders to get IDs)",
         },
+        company_id: {
+          type: ["number", "null"],
+          description: "Set to a company ID to move the article into that company's KB, or null to move it to the central KB (use hudu_list_companies to find IDs)",
+        },
       },
       required: ["id"],
     },
@@ -127,21 +131,21 @@ export const articleTools = [
   {
     name: "hudu_migrate_article_to_company",
     description:
-      "Migrate a central KB article into a company-specific KB space. Reads the source article, creates an identical copy in the target company space, and optionally deletes the original. Ideal for bulk migration of client-specific articles from the central KB into company portals. Use hudu_list_companies to find company IDs.",
+      "Move a KB article into a company-specific KB space (or back to central KB). This is an in-place move — history and version logs are fully preserved. Workflow: (1) use hudu_list_companies to find company_id, (2) optionally use hudu_list_article_folders with company_id to find a destination folder_id, (3) call this tool. Use hudu_list_articles with company_id to verify the result.",
     inputSchema: {
       type: "object" as const,
       properties: {
         article_id: {
           type: "number",
-          description: "Numeric ID of the source article to migrate",
+          description: "Numeric ID of the article to move",
         },
         company_id: {
-          type: "number",
-          description: "Numeric ID of the destination company space (use hudu_list_companies to find IDs)",
+          type: ["number", "null"],
+          description: "Numeric ID of the destination company space (use hudu_list_companies to find IDs), or null to move to the central KB",
         },
-        delete_original: {
-          type: "boolean",
-          description: "Whether to delete the original central KB article after copying. Defaults to false. Set to true only when you are sure the migration is complete.",
+        folder_id: {
+          type: "number",
+          description: "Optional folder ID within the company space to place the article in. Use hudu_list_article_folders with company_id to find available folder IDs.",
         },
       },
       required: ["article_id", "company_id"],
@@ -177,13 +181,14 @@ const UpdateSchema = z.object({
   id: z.number(),
   name: z.string().optional(),
   content: z.string().optional(),
-  folder_id: z.number().optional(),
+  folder_id: z.number().nullable().optional(),
+  company_id: z.number().nullable().optional(),
 });
 
 const MigrateSchema = z.object({
   article_id: z.number(),
-  company_id: z.number(),
-  delete_original: z.boolean().optional(),
+  company_id: z.number().nullable(),
+  folder_id: z.number().optional(),
 });
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -236,31 +241,30 @@ export async function handleArticleTool(
 
       case "hudu_update_article": {
         const { id, ...updates } = UpdateSchema.parse(args);
+        // When moving to a company space without specifying a folder, clear any existing
+        // central KB folder — Hudu requires folder and article to share the same company.
+        if (updates.company_id != null && updates.folder_id === undefined) {
+          updates.folder_id = null;
+        }
         const article = await client.updateArticle(id, updates);
         return ok(article);
       }
 
       case "hudu_migrate_article_to_company": {
-        const { article_id, company_id, delete_original } = MigrateSchema.parse(args);
-        const source = await client.getArticle(article_id);
-        const copy = await client.createArticle({
-          name: source.name,
-          content: source.content,
+        const { article_id, company_id, folder_id } = MigrateSchema.parse(args);
+        const article = await client.updateArticle(article_id, {
           company_id,
+          // Always send folder_id — default null clears any central KB folder.
+          // Hudu requires folder and article to share the same company.
+          folder_id: folder_id !== undefined ? folder_id : null,
         });
-        const result: Record<string, unknown> = {
-          message: `Article "${source.name}" copied to company ${company_id}.`,
-          source_id: source.id,
-          new_article_id: copy.id,
-          new_article_url: copy.url,
-          original_deleted: false,
-        };
-        if (delete_original) {
-          await client.deleteArticle(article_id);
-          result.original_deleted = true;
-          result.message = `Article "${source.name}" migrated to company ${company_id} and original deleted.`;
-        }
-        return ok(result);
+        const destination = company_id === null ? "central KB" : `company ${company_id}`;
+        return ok({
+          message: `Article "${article.name}" moved to ${destination}. History preserved.`,
+          article_id: article.id,
+          company_id: article.company_id,
+          url: article.url,
+        });
       }
 
       default:

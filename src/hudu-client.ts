@@ -61,6 +61,7 @@ export interface UpdateArticleParams {
   name?: string;
   content?: string;
   folder_id?: number | null;
+  company_id?: number | null;
 }
 
 // ─── Client ───────────────────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ export class HuduClient {
         name: params.name,
         content: params.content,
         ...(params.folder_id !== undefined && { folder_id: params.folder_id }),
+        ...(params.company_id !== undefined && { company_id: params.company_id }),
       },
     });
     return response.data.article;
@@ -137,6 +139,7 @@ export class HuduClient {
         ...(params.name !== undefined && { name: params.name }),
         ...(params.content !== undefined && { content: params.content }),
         ...(params.folder_id !== undefined && { folder_id: params.folder_id }),
+        ...(params.company_id !== undefined && { company_id: params.company_id }),
       },
     });
     return response.data.article;
@@ -164,9 +167,12 @@ export class HuduClient {
 
   // ─── Folders ─────────────────────────────────────────────────────────────────
 
-  async listFolders(): Promise<HuduFolder[]> {
+  async listFolders(params: { company_id?: number } = {}): Promise<HuduFolder[]> {
     const response = await this.http.get<{ folders: HuduFolder[] }>("/folders", {
-      params: { page_size: 100 },
+      params: {
+        page_size: 100,
+        ...(params.company_id !== undefined && { company_id: params.company_id }),
+      },
     });
     return response.data.folders ?? [];
   }
